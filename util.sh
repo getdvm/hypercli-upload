@@ -84,6 +84,7 @@ function process() {
   cp ${BIN_SRC_DIR}/hyper-${os_type} ${BIN_TGT_DIR}/hyper
   cp ${BIN_SRC_DIR}/checksum ${BIN_TGT_DIR}/
   cd ${BIN_TGT_DIR}
+  chmod +x hyper
 
   #verify checksum
   case ${os_type} in
@@ -145,37 +146,34 @@ function upload() {
   do
     echo "-------------------------- ${f} --------------------------"
     #
-    cp_local_to_s3 ${BIN_TGT_DIR}/${f}.md5 ${_DATE}/${f}.md5
+    s3_cp ${BIN_TGT_DIR}/${f}.md5 s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f}.md5
     #
     hyper_checksum_file=${f/.tar.gz/}
     hyper_checksum_file=${hyper_checksum_file/.bin.zip/}.checksum
-    cp_local_to_s3 ${BIN_TGT_DIR}/checksum ${_DATE}/${hyper_checksum_file}
+    s3_cp ${BIN_TGT_DIR}/checksum s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${hyper_checksum_file}
     #
-    cp_local_to_s3 ${BIN_TGT_DIR}/${f} ${_DATE}/${f}
+    s3_cp ${BIN_TGT_DIR}/${f} s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f}
   done
 
-  show_title "start mv hyper cli package from mirror-hyper-install to hyper-install"
+  show_title "start mv hyper cli package from 's3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/'  to s3://mirror-hyper-install/"
   for f in ${file_list[@]}
   do
     echo "-------------------------- ${f} --------------------------"
-    #
-    cp_s3_to_s3 ${_DATE} ${f}.md5
-    #
-    # hyper_checksum_file=${f/.tar.gz/}
-    # hyper_checksum_file=${hyper_checksum_file/.bin.zip/}.checksum
-    # cp_s3_to_s3 ${_DATE} ${hyper_checksum_file}
-    #
-    cp_s3_to_s3 ${_DATE} ${f}
+    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f}.md5 s3://mirror-hyper-install/${f}.md5
+    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f} s3://mirror-hyper-install/${f}
   done
 
+  show_title "start mv hyper cli package from 's3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/'  to s3://hyper-install/"
+  for f in ${file_list[@]}
+  do
+    echo "-------------------------- ${f} --------------------------"
+    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f}.md5 s3://hyper-install/${f}.md5
+    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f} s3://hyper-install/${f}
+  done
 }
 
-function cp_local_to_s3() {
-  time aws --profile hyper s3 cp $1 s3://mirror-hyper-install/hyperserve-cli-bak/$2
-}
-
-function cp_s3_to_s3() {
-  time aws --profile hyper s3 cp s3://mirror-hyper-install/hyperserve-cli-bak/$1/$2 s3://hyper-install/$2
+function s3_cp() {
+  time aws --profile hyper s3 cp $1 $2 --acl=public-read
 }
 
 function list_s3_by_date() {
