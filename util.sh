@@ -63,8 +63,8 @@ function process() {
     arm)   tag="arm"   ;;
     *)  tag="";;
   esac
-  ps aux | grep "util.sh upload ${os_type}" | grep -vE "(grep|$$)" | awk '{print $2}' | xargs -i sudo kill -9 {}
-  ps aux | grep "aws --profile hyper s3.*${tag}" | grep -vE "(grep|$$)" | awk '{print $2}' | xargs -i sudo kill -9 {}
+  ps aux | grep "util.sh upload ${os_type}" | grep -vE "(grep|$$)" | awk '{print $2}' | xargs -I pid sudo kill -9 pid
+  ps aux | grep "aws --profile hyper s3.*${tag}" | grep -vE "(grep|$$)" | awk '{print $2}' | xargs -I pid sudo kill -9 pid
 
 
   BIN_TGT_DIR="${WORKDIR}/upload/${_DATE}/${os_type}"
@@ -192,6 +192,8 @@ function list_s3_by_date() {
 #########################################################################################
 # main
 #########################################################################################
+ensure_dir
+
 case $1 in
   upload)
       case $2 in
