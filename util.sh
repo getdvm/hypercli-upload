@@ -13,9 +13,9 @@ function quit() {
 
 function show_usage() {
   case $1 in
-    upload)
+    compress|upload)
   cat <<EOF
-Usage: ./util.sh upload <os_type>
+Usage: ./util.sh $1 <os_type> [YYYYMMDD]
 <os_type>:
   linux
   mac
@@ -24,13 +24,17 @@ EOF
     ;;
   list)
   cat <<EOF
-Usage: ./util.sh list [YYYYMMDD]
+Usage: ./util.sh list <target> [YYYYMMDD]
+<target>
+  local
+  remote
 EOF
     ;;
   *)
   cat <<EOF
 Usage: ./util.sh <action>
 <action>
+  compress
   upload
   list
 EOF
@@ -48,15 +52,31 @@ function show_title() {
 EOF
 }
 function ensure_dir() {
+  if [ "$1" == "" ];then
+    _date=${_DATE}
+  else
+    _date=$1
+  fi
   mkdir -p ready/{linux,mac,arm}
-  mkdir -p upload/${_DATE}/{linux,mac,arm}
+  mkdir -p upload/${_date}/{linux,mac,arm}
 }
 
-function process() {
+################################################################################
+# compress hyper cli
+# src: ready/$1
+# target: upload/${_DATE}/$1
+################################################################################
+function compress() {
   os_type=$1
+  if [ "$2" == "" ];then
+    _date=${_DATE}
+  else
+    _date=$2
+  fi
+  ensure_dir ${_date}
   show_title "start compress hyper cli"
 
-  # kill original process
+  # kill original compress
   case ${os_type} in
     linux) tag="x86_64";;
     mac)   tag="mac"   ;;
@@ -67,7 +87,7 @@ function process() {
   ps aux | grep "aws --profile hyper s3.*${tag}" | grep -vE "(grep|$$)" | awk '{print $2}' | xargs -I pid sudo kill -9 pid
 
 
-  BIN_TGT_DIR="${WORKDIR}/upload/${_DATE}/${os_type}"
+  BIN_TGT_DIR="${WORKDIR}/upload/${_date}/${os_type}"
   BIN_SRC_DIR="${WORKDIR}/ready/${os_type}"
   #check source file
   [ ! -f ${BIN_SRC_DIR}/hyper-${os_type} ] && quit "1" "${BIN_SRC_DIR}/hyper-${os_type} not exist"
@@ -135,81 +155,116 @@ function process() {
       done
       ;;
   esac
-  upload "${BIN_TGT_DIR}" "${file_list}"
+  echo "---------- ${BIN_TGT_DIR} ----------"
+  ls -l ${BIN_TGT_DIR}
 }
 
+################################################################################
+# upload hyper cli packate to s3
+# src: upload/${_date}/$1
+# target: s3://mirror-hyper-install
+################################################################################
 function upload() {
-  BIN_TGT_DIR=$1
-  file_list=$2
+  os_type=$1
+  if [ "$2" == "" ];then
+    _date=${_DATE}
+  else
+    _date=$2
+  fi
+  ensure_dir ${_date}
+  BIN_TGT_DIR="${WORKDIR}/upload/${_date}/${os_type}"
+  [ ! -d ${BIN_TGT_DIR}  ] && quit 1 "dir ${BIN_TGT_DIR} not found,skip upload"
+
   show_title "start upload hyper cli package to s3"
-  for f in ${file_list[@]}
+  cd ${BIN_TGT_DIR}
+  #delete hyper
+  [ -f hyper ] && rm -rf hyper
+
+  #sync local to mirror s3
+  show_title "start sync local '${BIN_TGT_DIR}' to 's3://mirror-hyper-install/hyperserve-cli-bak/${_date}/${os_type}'"
+  s3_sync ${BIN_TGT_DIR} s3://mirror-hyper-install/hyperserve-cli-bak/${_date}/${os_type}
+
+  show_title "start copy hyper cli package from 's3://mirror-hyper-install/hyperserve-cli-bak/${_date}/${os_type}'  to s3://mirror-hyper-install/"
+  for f in $(ls hyper-*)
   do
     echo "-------------------------- ${f} --------------------------"
-    #
-    s3_cp ${BIN_TGT_DIR}/${f}.md5 s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f}.md5
-    #
-    hyper_checksum_file=${f/.tar.gz/}
-    hyper_checksum_file=${hyper_checksum_file/.bin.zip/}.checksum
-    s3_cp ${BIN_TGT_DIR}/checksum s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${hyper_checksum_file}
-    #
-    s3_cp ${BIN_TGT_DIR}/${f} s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f}
+    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_date}/${os_type}/${f} s3://mirror-hyper-install/${f}
   done
 
-  show_title "start mv hyper cli package from 's3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/'  to s3://mirror-hyper-install/"
-  for f in ${file_list[@]}
+  show_title "start copy hyper cli package from 's3://mirror-hyper-install/hyperserve-cli-bak/${_date}/${os_type}'  to s3://hyper-install/"
+  for f in $(ls hyper-*)
   do
     echo "-------------------------- ${f} --------------------------"
-    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f}.md5 s3://mirror-hyper-install/${f}.md5
-    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f} s3://mirror-hyper-install/${f}
+    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_date}/${os_type}/${f} s3://hyper-install/${f}
   done
+}
 
-  show_title "start mv hyper cli package from 's3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/'  to s3://hyper-install/"
-  for f in ${file_list[@]}
-  do
-    echo "-------------------------- ${f} --------------------------"
-    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f}.md5 s3://hyper-install/${f}.md5
-    s3_cp s3://mirror-hyper-install/hyperserve-cli-bak/${_DATE}/${f} s3://hyper-install/${f}
-  done
+function s3_sync() {
+  time aws --profile hyper s3 sync $1 $2 --acl=public-read
 }
 
 function s3_cp() {
   time aws --profile hyper s3 cp $1 $2 --acl=public-read
 }
 
-function list_s3_by_date() {
-  show_title "[mirror] s3://mirror-hyper-install/hyperserve-cli-bak/$1/"
-  aws --profile hyper s3 ls s3://mirror-hyper-install/hyperserve-cli-bak/$1/
+function list_local() {
+  if [ "$1" == "" ];then
+    _date=${_DATE}
+  else
+    _date=$1
+  fi
+  BIN_TGT_DIR="${WORKDIR}/upload/${_date}"
+  [ ! -d ${BIN_TGT_DIR} ] && quit 1 "${BIN_TGT_DIR} not exist"
+
+  for os_type in $(ls ${BIN_TGT_DIR})
+  do
+    echo
+    echo "=============== [ ${BIN_TGT_DIR}/${os_type} ] ==============="
+    ls -l ${BIN_TGT_DIR}/${os_type}
+  done
+}
+
+function list_remote() {
+  if [ "$1" == "" ];then
+    _date=${_DATE}
+  else
+    _date=$1
+  fi
+
+  show_title "[mirror] s3://mirror-hyper-install/hyperserve-cli-bak/${_date}/"
+  aws --profile hyper s3 ls s3://mirror-hyper-install/hyperserve-cli-bak/${_date}/ --human-readable --summarize
 
   show_title "[mirror] s3://mirror-hyper-install/"
-  aws --profile hyper s3 ls s3://mirror-hyper-install/
+  aws --profile hyper s3 ls s3://mirror-hyper-install/ --human-readable --summarize
 
   show_title "s3://hyper-install/"
-  aws --profile hyper s3 ls s3://hyper-install/
+  aws --profile hyper s3 ls s3://hyper-install/ --human-readable --summarize
 }
 
 #########################################################################################
 # main
 #########################################################################################
-ensure_dir
-
 case $1 in
+  compress)
+      case $2 in
+        linux|mac|arm)  compress $2 $3 ;;
+        '')     show_usage "compress" ;;
+        *)      quit 1 "unsupport os type '$1', only support linux/mac/arm" ;;
+      esac
+    ;;
   upload)
       case $2 in
-        linux)  process linux ;;
-        mac)    process mac ;;
-        arm)    process arm ;;
+        linux|mac|arm)  upload $2 $3;;
         '')     show_usage "upload" ;;
         *)      quit 1 "unsupport os type '$1', only support linux/mac/arm" ;;
       esac
     ;;
   list)
-      if [ $# -eq 1 ];then
-        list_s3_by_date ${_DATE}
-      elif [ $# -eq 2 ];then
-        list_s3_by_date $2
-      else
-        show_usage "list"
-      fi
+      case $2 in
+        local)  list_local $3;;
+        remote) list_remote $3;;
+        *)      show_usage "list";;
+      esac
       ;;
   *)
     show_usage ""
