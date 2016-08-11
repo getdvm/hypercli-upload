@@ -104,7 +104,7 @@ function compress() {
   cp ${BIN_SRC_DIR}/hyper-${os_type} ${BIN_TGT_DIR}/hyper
   cp ${BIN_SRC_DIR}/checksum ${BIN_TGT_DIR}/
   cd ${BIN_TGT_DIR}
-  chmod +x hyper
+  #chmod +x hyper
 
   #verify checksum
   case ${os_type} in
@@ -125,34 +125,25 @@ function compress() {
   #tar
   case ${os_type} in
     linux)
-      for i in latest 1.10
-      do
-        echo "compress to hyper-${i}-x86_64.tar.gz ..."
-        tar czvf hyper-${i}-x86_64.tar.gz hyper
-        md5sum hyper-${i}-x86_64.tar.gz > hyper-${i}-x86_64.tar.gz.md5
-        file_list[$n]="hyper-${i}-x86_64.tar.gz"
+        echo "compress to hyper-linux-x86_64.tar.gz ..."
+        tar czvf hyper-linux-x86_64.tar.gz hyper
+        md5sum hyper-linux-x86_64.tar.gz > hyper-linux-x86_64.tar.gz.md5
+        file_list[$n]="hyper-linux-x86_64.tar.gz"
         n=$((n+1))
-      done
       ;;
     mac)
-      for i in latest 1.10
-      do
-        echo "compress to hyper-${i}-mac.bin.zip ..."
-        zip hyper-${i}-mac.bin.zip hyper
-        md5 hyper-${i}-mac.bin.zip > hyper-${i}-mac.bin.zip.md5
-        file_list[$n]="hyper-${i}-mac.bin.zip"
+        echo "compress to hyper-mac.bin.zip ..."
+        zip hyper-mac.bin.zip hyper
+        md5 hyper-mac.bin.zip > hyper-mac.bin.zip.md5
+        file_list[$n]="hyper-mac.bin.zip"
         n=$((n+1))
-      done
       ;;
     arm)
-      for i in latest 1.10
-      do
-        echo "compress to hyper-${i}-arm.tar.gz ..."
-        tar czvf hyper-${i}-arm.tar.gz hyper
-        md5sum hyper-${i}-arm.tar.gz > hyper-${i}-arm.tar.gz.md5
-        file_list[$n]="hyper-${i}-arm.tar.gz"
+        echo "compress to hyper-arm.tar.gz ..."
+        tar czvf hyper-arm.tar.gz hyper
+        md5sum hyper-arm.tar.gz > hyper-arm.tar.gz.md5
+        file_list[$n]="hyper-arm.tar.gz"
         n=$((n+1))
-      done
       ;;
   esac
   echo "---------- ${BIN_TGT_DIR} ----------"
