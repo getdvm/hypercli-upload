@@ -2,7 +2,6 @@ upload hyper cli to s3
 ===================================
 
 - set acl: public-read
-- chmod +x hyper
 
 
 # install awscli
