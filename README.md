@@ -70,3 +70,14 @@ $ ./util.sh list local
 ```
 $ ./util.sh list remote
 ```
+
+# FAQ
+
+## 1 RequestTimeTooSkewed when upload to s3
+```
+Error message:
+  An error occurred (RequestTimeTooSkewed) when calling the ListBuckets operation: The difference between the request time and the current time is too large.
+
+Solution:
+  $ sudo ntpdate time.nist.gov 
+```
